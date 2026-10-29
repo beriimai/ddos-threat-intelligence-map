@@ -194,6 +194,48 @@ function RotatingGlobe({
   const wireframeGeometry = useMemo(() => {
     return new THREE.SphereGeometry(config.radius * 1.002, 32, 16);
   }, [config.radius]);
+  
+  // Create curved connections between consecutive sample locations
+  const arcs = useMemo(() => {
+    return markers.slice(0, -1).map((marker, index) => {
+      const nextMarker = markers[index + 1];
+
+      const start = latLngToVector3(
+        marker.lat,
+        marker.lng,
+        config.radius * 1.015
+      );
+
+      const end = latLngToVector3(
+        nextMarker.lat,
+        nextMarker.lng,
+        config.radius * 1.015
+      );
+
+      // Lift the middle of the path above Earth's surface
+      const midpoint = start.clone().add(end);
+      if (midpoint.length() < 0.001) {
+        midpoint.set(0, 1, 0);
+      }
+      midpoint.normalize().multiplyScalar(config.radius * 1.35);
+
+      const curve = new THREE.QuadraticBezierCurve3(
+        start,
+        midpoint,
+        end
+      );
+
+      const color =
+        marker.severity === "HIGH"
+          ? "#ff5263"
+          : marker.severity === "MEDIUM"
+            ? "#f5bd68"
+            : "#57dfc1";
+
+      return { curve, color, key: `${index}-${marker.ip}` };
+    });
+  }, [markers, config.radius]);
+
 
   return (
     <group ref={groupRef}>
@@ -219,6 +261,20 @@ function RotatingGlobe({
           />
         </mesh>
       )}
+
+      {/* Simulated connection arcs */}
+      {arcs.map((arc) => (
+        <mesh key={arc.key}>
+          <tubeGeometry
+            args={[arc.curve, 48, 0.006, 6, false]}
+          />
+          <meshBasicMaterial
+            color={arc.color}
+            transparent
+            opacity={0.85}
+          />
+        </mesh>
+      ))}
 
       {/* Markers - now inside the rotating group */}
       {markers.map((marker, index) => (
